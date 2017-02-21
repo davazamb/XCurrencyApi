@@ -39,6 +39,7 @@
       <DependentUpon>App.xaml</DependentUpon>
     </Compile>
     <Compile Include="Classes\ExchangeRates.cs" />
+    <Compile Include="Controls\BindablePicker.cs" />
     <Compile Include="Infrastructure\InstanceLocator.cs" />
     <Compile Include="Pages\MainPage.xaml.cs">
       <DependentUpon>MainPage.xaml</DependentUpon>
