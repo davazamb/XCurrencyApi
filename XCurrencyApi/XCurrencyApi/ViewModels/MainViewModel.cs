@@ -1,10 +1,14 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
+using System.Net.Http;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows.Input;
 using XCurrencyApi.Classes;
 
 namespace XCurrencyApi.ViewModels
@@ -113,6 +117,21 @@ namespace XCurrencyApi.ViewModels
                 return isEnabled;
             }
         }
+        public string Message
+        {
+            set
+            {
+                if (message != value)
+                {
+                    message = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("Message"));
+                }
+            }
+            get
+            {
+                return message;
+            }
+        }
 
         #endregion
 
@@ -124,12 +143,98 @@ namespace XCurrencyApi.ViewModels
         #region Constructors
 
         public MainViewModel()
-        //{
+        {
             Rates = new ObservableCollection<Rate>();
+            Message = "Enter an amount, select a source currency, select a target currency and press convert button.";
             IsEnabled = false;
             GetRates();
-        }      
+        }
         #endregion
+
+        #region Methods
+
+        private void LoadRates()
+        {
+            Rates.Clear();
+            var type = typeof(Rates);
+            var properties = type.GetRuntimeFields();
+
+            foreach (var property in properties)
+            {
+                var code = property.Name.Substring(1, 3);
+                Rates.Add(new Rate
+                {
+                    Code = code,
+                    TaxRate = (double)property.GetValue(exchangeRates.Rates),
+                });
+            }
+        }
+
+        private async void GetRates()
+        {
+            try
+            {
+                var client = new HttpClient();
+                client.BaseAddress = new Uri("https://openexchangerates.org");
+                var url = "/api/latest.json?app_id=c5ad6fcb983f45448075f48c7cfc32f0";
+                var response = await client.GetAsync(url);
+                if (!response.IsSuccessStatusCode)
+                {
+                    await App.Current.MainPage.DisplayAlert("Error", response.StatusCode.ToString(), "Aceptar");
+                    IsRunning = false;
+                    IsEnabled = false;
+                    return;
+                }
+
+                var result = await response.Content.ReadAsStringAsync();
+                exchangeRates = JsonConvert.DeserializeObject<ExchangeRates>(result);
+            }
+            catch (Exception ex)
+            {
+                await App.Current.MainPage.DisplayAlert("Error", ex.Message, "Aceptar");
+                IsRunning = false;
+                IsEnabled = false;
+                return;
+            }
+
+            LoadRates();
+            IsRunning = false;
+            IsEnabled = true;
+        }
+
+        #endregion
+
+        #region Commands
+
+        public ICommand ConvertCommand { get { return new GalaSoft.MvvmLight.Command.RelayCommand(ConvertMoney); } }
+
+        private async void ConvertMoney()
+        {
+            if (Amount <= 0)
+            {
+                await App.Current.MainPage.DisplayAlert("Error", "You must enter an amount", "Acept");
+                return;
+            }
+
+            if (SourceRate == 0)
+            {
+                await App.Current.MainPage.DisplayAlert("Error", "You must select a source rate", "Acept");
+                return;
+            }
+
+            if (TargetRate == -1)
+            {
+                await App.Current.MainPage.DisplayAlert("Error", "You must select a target rate", "Acept");
+                return;
+            }
+
+            decimal amountConverted = amount / (decimal)sourceRate * (decimal)targetRate;
+
+            Message = string.Format("{0:N2} = {1:N2}", amount, amountConverted);
+        }
+
+        #endregion
+
 
     }
 }
